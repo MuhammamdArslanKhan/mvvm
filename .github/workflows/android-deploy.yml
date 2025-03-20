@@ -59,14 +59,18 @@ jobs:
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > keystore.jks
 
       - name: Gradle Build
-        run: ./gradlew ${{ inputs.gradle_task }}
+        id: gradle_build
+        run: |
+          ./gradlew ${{ inputs.gradle_task }}
+          BUILD_OUTPUT_PATH=$(find app/build/outputs -name '*.${{ inputs.gradle_task == 'bundleRelease' || inputs.gradle_task == 'bundleDebug' && 'aab' || 'apk'}}' -print -quit)
+          echo "::set-output name=artifact_path::$BUILD_OUTPUT_PATH"
 
       - name: Upload to Play Store
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
           packageName: ${{ github.event.repository.name | replace('-', '.') }}
-          releaseFiles: app/build/outputs/${{ inputs.gradle_task | replace('bundle', 'bundle/') | replace('assemble', 'apk/') }}/*.${{ inputs.gradle_task | replace('bundleRelease', 'aab') | replace('bundleDebug', 'aab') | replace('assembleRelease', 'apk') | replace('assembleDebug', 'apk') }}
+          releaseFiles: ${{ steps.gradle_build.outputs.artifact_path }}
           track: ${{ inputs.playstore_track }}
           status: completed
           inAppUpdatePriority: ${{ inputs.in_app_update_priority }}
