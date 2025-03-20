@@ -1,0 +1,31 @@
+name: Deploy All Platforms
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  android_deploy:
+    uses: ./.github/workflows/android-deploy.yml
+    with:
+      gradle_task: bundleRelease
+      playstore_track: production
+      playstore_user_fraction: 0.5
+      in_app_update_priority: 1
+    secrets:
+      PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+      KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+  ios_deploy:
+    uses: ./.github/workflows/ios-deploy.yml
+    with:
+      xcode_scheme: MyAppRelease
+    secrets:
+      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+      CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+      CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+      PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}

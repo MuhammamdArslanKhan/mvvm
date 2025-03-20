@@ -1,0 +1,73 @@
+name: Android Deploy to Play Store
+
+on:
+  workflow_call:
+    inputs:
+      gradle_task:
+        required: true
+        type: string
+        description: 'Gradle task (e.g., bundleRelease, assembleRelease)'
+      playstore_track:
+        required: true
+        type: string
+        description: 'Play Store track (internal, alpha, beta, production)'
+      playstore_user_fraction:
+        required: false
+        type: number
+        description: "User fraction for staged rollout (0.0 - 1.0)"
+        default: 1.0
+      in_app_update_priority:
+        required: false
+        type: number
+        description: "In-App update priority (0-5)"
+        default: 0
+    secrets:
+      PLAY_STORE_JSON_KEY:
+        required: true
+        description: 'Google Play Store service account JSON key'
+      KEYSTORE_FILE:
+        required: true
+        description: 'Base64 encoded keystore file'
+      KEYSTORE_PASSWORD:
+        required: true
+        description: 'Keystore password'
+      KEY_ALIAS:
+        required: true
+        description: 'Key alias'
+      KEY_PASSWORD:
+        required: true
+        description: 'Key password'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/gradle-build-action@v2
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > keystore.jks
+
+      - name: Gradle Build
+        run: ./gradlew ${{ inputs.gradle_task }}
+
+      - name: Upload to Play Store
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_JSON_KEY }}
+          packageName: ${{ github.event.repository.name | replace('-', '.') }}
+          releaseFiles: app/build/outputs/${{ inputs.gradle_task | replace('bundle', 'bundle/') | replace('assemble', 'apk/') }}/*.${{ inputs.gradle_task | replace('bundleRelease', 'aab') | replace('bundleDebug', 'aab') | replace('assembleRelease', 'apk') | replace('assembleDebug', 'apk') }}
+          track: ${{ inputs.playstore_track }}
+          status: completed
+          inAppUpdatePriority: ${{ inputs.in_app_update_priority }}
+          userFraction: ${{ inputs.playstore_user_fraction }}
