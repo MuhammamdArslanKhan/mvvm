@@ -1,0 +1,54 @@
+name: iOS Deploy to App Store Connect
+
+on:
+  workflow_call:
+    inputs:
+      xcode_scheme:
+        required: true
+        type: string
+        description: 'Xcode scheme'
+    secrets:
+      APP_STORE_CONNECT_API_KEY:
+        required: true
+        description: 'App Store Connect API key JSON'
+      CERTIFICATE_P12:
+        required: true
+        description: 'Base64 encoded .p12 certificate'
+      CERTIFICATE_PASSWORD:
+        required: true
+        description: 'Certificate password'
+      PROVISIONING_PROFILE:
+        required: true
+        description: 'Base64 encoded provisioning profile'
+
+jobs:
+  deploy:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Certificates and Provisioning Profile
+        run: |
+          echo "${{ secrets.CERTIFICATE_P12 }}" | base64 --decode > certificate.p12
+          security create-keychain -p ${{ secrets.CERTIFICATE_PASSWORD }} build.keychain
+          security import certificate.p12 -k build.keychain -P ${{ secrets.CERTIFICATE_PASSWORD }} -T /usr/bin/codesign
+          security set-keychain-settings -lut 21600 build.keychain
+          echo "${{ secrets.PROVISIONING_PROFILE }}" | base64 --decode > profile.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/$(uuidgen).mobileprovision
+
+      - name: Install App Store Connect API Key
+        run: |
+          echo '${{ secrets.APP_STORE_CONNECT_API_KEY }}' > app_store_connect_api_key.json
+
+      - name: Build and Export IPA
+        run: |
+          xcodebuild clean archive -project YourProject.xcodeproj -scheme ${{ inputs.xcode_scheme }} -archivePath build/YourApp.xcarchive
+          xcodebuild -exportArchive -archivePath build/YourApp.xcarchive -exportPath build -exportOptionsPlist ExportOptions.plist
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_15.app/Contents/Developer #Adjust Xcode version
+
+      - name: Upload to TestFlight
+        run: |
+          xcrun altool --upload-app -f build/YourApp.ipa --type ios --apiKey "$(jq -r .key_id app_store_connect_api_key.json)" --apiIssuer "$(jq -r .issuer_id app_store_connect_api_key.json)"
